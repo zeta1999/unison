@@ -1,0 +1,66 @@
+name: CI
+
+on:
+  pull_request:
+  push:
+
+jobs:
+  build:
+    name: ${{ matrix.os }}
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest] # [ubuntu-latest, macOS-latest]
+        ghc: ["8.8.3"]
+    steps:
+      - uses: actions/checkout@v2
+        name: checkout
+      - uses: actions/cache@v1
+        name: cache ~/.stack
+        with:
+          path: ~/.stack
+          key: x-${{ runner.os }}-${{ matrix.ghc }}-stack-${{ hashFiles('stack.yaml') }}
+          restore-keys: x-${{ runner.os }}-${{ matrix.ghc }}-stack-
+      - uses: actions/cache@v1
+        name: cache .stack-work
+        with:
+          path: .stack-work
+          key: x-${{ runner.os }}-${{ matrix.ghc }}-stack-work-${{ github.sha }}
+          restore-keys: x-${{ runner.os }}-${{ matrix.ghc }}-stack-work-
+      - uses: actions/cache@v1
+        name: cache parser-typechecker/.stack-work
+        with:
+          path: parser-typechecker/.stack-work
+          key: x-${{ runner.os }}-${{ matrix.ghc }}-parser-typechecker-stack-work-${{ github.sha }}
+          restore-keys: x-${{ runner.os }}-${{ matrix.ghc }}-parser-typechecker-stack-work-
+      - uses: actions/cache@v1
+        name: cache unison-core/.stack-work
+        with:
+          path: unison-core/.stack-work
+          key: x-${{ runner.os }}-${{ matrix.ghc }}-unison-core-stack-work-${{ github.sha }}
+          restore-keys: x-${{ runner.os }}-${{ matrix.ghc }}-unison-core-stack-work-
+      - uses: actions/cache@v1
+        name: cache yaks/easytest/.stack-work
+        with:
+          path: yaks/easytest/.stack-work
+          key: x-${{ runner.os }}-${{ matrix.ghc }}-yaks-easytest-stack-work-${{ github.sha }}
+          restore-keys: x-${{ runner.os }}-${{ matrix.ghc }}-yaks-easytest-stack-work-
+      - uses: actions/setup-haskell@v1.1
+        name: setup
+        with:
+          ghc-version: ${{ matrix.ghc }}
+          enable-stack: true
+      - name: build dependencies
+        run: stack --no-terminal --system-ghc build --fast --only-dependencies
+      - name: build
+        run: stack --no-terminal --system-ghc build --fast
+      - name: tests
+        run: |
+          git config --global user.name "GitHub Action"
+          stack --no-terminal --system-ghc exec tests
+      - name: transcripts
+        run: |
+          stack --no-terminal --system-ghc exec transcripts
+          git diff
+          x=`git status --porcelain -uno` bash -c 'if [[ -n $x ]]; then echo "$x" && false; fi'
